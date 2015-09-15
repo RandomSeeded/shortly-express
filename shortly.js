@@ -68,9 +68,9 @@ function(req, res) {
   checkUser(req, function(userLoggedIn) {
     if (userLoggedIn) {
       console.log('reached');  
-      Links.reset();
-      new Link({user_id: userLoggedIn.get('id')}).fetch().then(function(links) {
-        console.log('LINKS',links);
+      //new Link({user_id: userLoggedIn.get('id')})
+      Links.reset().query({where: {user_id: userLoggedIn.get('id')}
+      }).fetch().then(function(links) {
         res.send(200, links.models);
       })
       .catch(function(err) {
