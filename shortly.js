@@ -3,6 +3,7 @@ var session = require('express-session');
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
+var bcrypt = require('bcrypt-nodejs');
 
 
 var db = require('./app/config');
@@ -29,37 +30,49 @@ app.use(express.static(__dirname + '/public'));
 
 app.get('/', 
 function(req, res) {
-  console.log('sessionid',req.sessionID);
-  // do our bookshelf query here to see if the sessionid corresopnds to a user. If not, redirect to /login
-  new User({session_id: req.sessionID}) // create a user object with the session id
-    .fetch() // check to see if any users in the users table have that session id
-    .then(function(model) { // save that result to model
-      console.log('result of fetch', model);
-      if (model) { 
-        res.render('index');
-      } // we already have a user! wooooo logged in with his info
-    })
-    .catch(function() {
-      console.log('catch');
-      res.redirect('/login');
-    });
-  //res.render('index');
+  console.log('Checking sessionid',req.sessionID);
+  checkUser(req, function(userLoggedIn) {
+    // 2 render statements: 1 for /, 1 for redirect
+    if (userLoggedIn) { res.render('index'); }
+    else { res.redirect('/login'); }
+  });
 });
+
+function checkUser(req, callback) {
+  new User({session_id: req.sessionID}) // create a user object with the session id
+  .fetch() // check to see if any users in the users table have that session id
+  .then(function(model) { // save that result to model
+    console.log('result of fetch', model);
+    if (model) {
+      callback(true); 
+    } else {
+       callback(false);
+    } // we already have a user! wooooo logged in with his info
+  })
+  .catch(function() {
+    console.log('catch');
+    callback(false);
+  });
+}
 
 app.get('/create', 
 function(req, res) {
-  console.log(req.session.cookie);
-  res.render('index');
+  checkUser(req, function(userLoggedIn) {
+    if (userLoggedIn) { res.render('index'); }
+    else { res.redirect('/login'); }
+  });
 });
 
 app.get('/links', 
 function(req, res) {
-  console.log('links');
-  req.session.cookie.link="link";
-  console.log(req.session.cookie);
-  Links.reset().fetch().then(function(links) {
-    res.send(200, links.models);
-  });
+  checkUser(req, function(userLoggedIn) {
+    if (userLoggedIn) {  
+      Links.reset().fetch().then(function(links) {
+        res.send(200, links.models);
+      });
+    }
+    else { res.redirect('/login'); }
+  });  
 });
 
 app.get('/login', function(req, res) {
@@ -72,11 +85,11 @@ app.get('/signup', function(req, res) {
 
 //TODO : app.post users
 
-// app.get('/logout', function(request, response){
-//     request.session.destroy(function(){
-//         response.redirect('/'); // redirect to login
-//     });
-// });
+app.get('/logout', function(request, response){
+    request.session.destroy(function(){
+        response.redirect('/'); // redirect to login
+    });
+});
 
 app.post('/links', 
 function(req, res) {
@@ -118,29 +131,49 @@ function(req, res) {
 app.post('/signup', function(req, res) {
     var username = req.body.username
     var password = req.body.password
-    var salt = 'abdd'
     var session_id = req.sessionID
 
+    console.log('signup');
     Users.create({
-      username: 'asdf',
-      password: 'asdf'
+      username: username,
+      password: password,
+      session_id: session_id
     })
     .then(function(newUser) {
-      res.send(200, newUser);
+      res.redirect('/');
+    })
+    .catch(function(err) {
+      console.log('e',err);
     });
   }
 )
 
 app.post('/login', 
   function(req, res) {
-    /*var username = req.body.username
+    var username = req.body.username
     var password = req.body.password
      
-    new User( {username : username, password : password} ).fetch().then(function(found) {
+    new User( {username : username} ).fetch().then(function(found) {
       if (found) {
-        
+        console.log('found',found)
+        bcrypt.compare(password, found.get('password'), function(err, result) {
+          console.log('RESULT:',result);
+          if (err) { console.log(err); }
+          if (result === false) {
+            res.redirect('/login');
+          } else {
+            // Add this session_id to the user table
+            console.log('Setting sessionid',req.sessionID);
+            found.set('session_id', req.sessionID).save(); // better way to update in table?
+            res.redirect('/')
+          }
+        })  
       }
-    })*/
+      else {
+        res.redirect('/login');
+        console.log('not found');
+      }
+    })
   }
 )
 
