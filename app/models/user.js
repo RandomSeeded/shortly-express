@@ -9,6 +9,9 @@ var User = db.Model.extend({
   initialize: function() {
     this.on('creating', this.hashPass, this);
   },
+  links: function() {
+    return this.hasMany(Link);
+  },
   hashPass: function(model) { // see: http://wesleytsai.io/2015/07/28/bookshelf-bcrpyt-password-hashing/
     return new Promise(function(resolve, reject) {
       bcrypt.hash(model.attributes.password, null, null, function(err, hash) {

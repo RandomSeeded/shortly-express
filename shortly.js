@@ -42,16 +42,16 @@ function checkUser(req, callback) {
   new User({session_id: req.sessionID}) // create a user object with the session id
   .fetch() // check to see if any users in the users table have that session id
   .then(function(model) { // save that result to model
-    console.log('result of fetch', model);
+    // console.log('result of fetch', model);
     if (model) {
-      callback(true); 
+      callback(model); 
     } else {
-       callback(false);
+       callback(null);
     } // we already have a user! wooooo logged in with his info
   })
   .catch(function() {
     console.log('catch');
-    callback(false);
+    callback(null);
   });
 }
 
@@ -66,9 +66,15 @@ function(req, res) {
 app.get('/links', 
 function(req, res) {
   checkUser(req, function(userLoggedIn) {
-    if (userLoggedIn) {  
-      Links.reset().fetch().then(function(links) {
+    if (userLoggedIn) {
+      console.log('reached');  
+      Links.reset();
+      new Link({user_id: userLoggedIn.get('id')}).fetch().then(function(links) {
+        console.log('LINKS',links);
         res.send(200, links.models);
+      })
+      .catch(function(err) {
+        console.log('links get err',err);
       });
     }
     else { res.redirect('/login'); }
@@ -94,32 +100,38 @@ app.get('/logout', function(request, response){
 app.post('/links', 
 function(req, res) {
   var uri = req.body.url;
+  checkUser(req, function(userLoggedIn) {
+    if (userLoggedIn) {
+      if (!util.isValidUrl(uri)) {
+        console.log('Not a valid url: ', uri);
+        return res.send(404);
+      }
+      var user_id = userLoggedIn.get('id')
+      console.log('USERID:',user_id);
+      new Link({ url: uri, user_id: user_id}).fetch().then(function(found) {
+        if (found) {
+          res.send(200, found.attributes);
+        } else {
+          util.getUrlTitle(uri, function(err, title) {
+            if (err) {
+              console.log('Error reading URL heading: ', err);
+              return res.send(404);
+            }
 
-  if (!util.isValidUrl(uri)) {
-    console.log('Not a valid url: ', uri);
-    return res.send(404);
-  }
-
-  new Link({ url: uri }).fetch().then(function(found) {
-    if (found) {
-      res.send(200, found.attributes);
-    } else {
-      util.getUrlTitle(uri, function(err, title) {
-        if (err) {
-          console.log('Error reading URL heading: ', err);
-          return res.send(404);
+            Links.create({
+              url: uri,
+              title: title,
+              base_url: req.headers.origin,
+              user_id: user_id
+            })
+            .then(function(newLink) {
+              res.send(200, newLink);
+            });
+          });
         }
-
-        Links.create({
-          url: uri,
-          title: title,
-          base_url: req.headers.origin
-        })
-        .then(function(newLink) {
-          res.send(200, newLink);
-        });
       });
     }
+    else { res.redirect('/login'); }
   });
 });
 
