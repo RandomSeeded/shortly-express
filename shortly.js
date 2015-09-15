@@ -1,4 +1,5 @@
 var express = require('express');
+var session = require('express-session');
 var util = require('./lib/utility');
 var partials = require('express-partials');
 var bodyParser = require('body-parser');
@@ -10,6 +11,7 @@ var User = require('./app/models/user');
 var Links = require('./app/collections/links');
 var Link = require('./app/models/link');
 var Click = require('./app/models/click');
+var User = require('./app/models/user');
 
 var app = express();
 
@@ -20,25 +22,61 @@ app.use(partials());
 app.use(bodyParser.json());
 // Parse forms (signup/login)
 app.use(bodyParser.urlencoded({ extended: true }));
+app.use(session({secret:'oogabooga'/*, resave: false, saveUninitialized: false*/}));
 app.use(express.static(__dirname + '/public'));
 
+// screw around can we interact with our databases code
 
 app.get('/', 
 function(req, res) {
-  res.render('index');
+  console.log('sessionid',req.sessionID);
+  // do our bookshelf query here to see if the sessionid corresopnds to a user. If not, redirect to /login
+  new User({session_id: req.sessionID}) // create a user object with the session id
+    .fetch() // check to see if any users in the users table have that session id
+    .then(function(model) { // save that result to model
+      console.log('result of fetch', model);
+      if (model) { 
+        res.render('index');
+      } // we already have a user! wooooo logged in with his info
+    })
+    .catch(function() {
+      console.log('catch');
+      res.redirect('/login');
+    });
+  //res.render('index');
 });
 
 app.get('/create', 
 function(req, res) {
+  console.log(req.session.cookie);
   res.render('index');
 });
 
 app.get('/links', 
 function(req, res) {
+  console.log('links');
+  req.session.cookie.link="link";
+  console.log(req.session.cookie);
   Links.reset().fetch().then(function(links) {
     res.send(200, links.models);
   });
 });
+
+app.get('/login', function(req, res) {
+  res.render('login');
+});
+
+app.get('/signup', function(req, res) {
+  res.render('signup');
+})
+
+//TODO : app.post users
+
+// app.get('/logout', function(request, response){
+//     request.session.destroy(function(){
+//         response.redirect('/'); // redirect to login
+//     });
+// });
 
 app.post('/links', 
 function(req, res) {
@@ -76,7 +114,35 @@ function(req, res) {
 // Write your authentication routes here
 /************************************************************/
 
+// post request to login
+app.post('/signup', function(req, res) {
+    var username = req.body.username
+    var password = req.body.password
+    var salt = 'abdd'
+    var session_id = req.sessionID
 
+    Users.create({
+      username: 'asdf',
+      password: 'asdf'
+    })
+    .then(function(newUser) {
+      res.send(200, newUser);
+    });
+  }
+)
+
+app.post('/login', 
+  function(req, res) {
+    /*var username = req.body.username
+    var password = req.body.password
+     
+    new User( {username : username, password : password} ).fetch().then(function(found) {
+      if (found) {
+        
+      }
+    })*/
+  }
+)
 
 /************************************************************/
 // Handle the wildcard route last - if all other routes fail
