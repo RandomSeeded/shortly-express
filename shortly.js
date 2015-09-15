@@ -19,38 +19,30 @@ var app = express();
 app.set('views', __dirname + '/views');
 app.set('view engine', 'ejs');
 app.use(partials());
-// Parse JSON (uniform resource locators)
 app.use(bodyParser.json());
-// Parse forms (signup/login)
 app.use(bodyParser.urlencoded({ extended: true }));
-app.use(session({secret:'oogabooga'/*, resave: false, saveUninitialized: false*/}));
+app.use(session({secret:'oogabooga'}));
 app.use(express.static(__dirname + '/public'));
-
-// screw around can we interact with our databases code
 
 app.get('/', 
 function(req, res) {
-  console.log('Checking sessionid',req.sessionID);
   checkUser(req, function(userLoggedIn) {
-    // 2 render statements: 1 for /, 1 for redirect
     if (userLoggedIn) { res.render('index'); }
     else { res.redirect('/login'); }
   });
 });
 
 function checkUser(req, callback) {
-  new User({session_id: req.sessionID}) // create a user object with the session id
-  .fetch() // check to see if any users in the users table have that session id
-  .then(function(model) { // save that result to model
-    // console.log('result of fetch', model);
+  new User({session_id: req.sessionID})
+  .fetch()
+  .then(function(model) {
     if (model) {
       callback(model); 
     } else {
        callback(null);
-    } // we already have a user! wooooo logged in with his info
+    }
   })
   .catch(function() {
-    console.log('catch');
     callback(null);
   });
 }
@@ -67,8 +59,6 @@ app.get('/links',
 function(req, res) {
   checkUser(req, function(userLoggedIn) {
     if (userLoggedIn) {
-      console.log('reached');  
-      //new Link({user_id: userLoggedIn.get('id')})
       Links.reset().query({where: {user_id: userLoggedIn.get('id')}
       }).fetch().then(function(links) {
         res.send(200, links.models);
@@ -87,13 +77,11 @@ app.get('/login', function(req, res) {
 
 app.get('/signup', function(req, res) {
   res.render('signup');
-})
-
-//TODO : app.post users
+});
 
 app.get('/logout', function(request, response){
     request.session.destroy(function(){
-        response.redirect('/'); // redirect to login
+        response.redirect('/');
     });
 });
 
@@ -107,7 +95,6 @@ function(req, res) {
         return res.send(404);
       }
       var user_id = userLoggedIn.get('id')
-      console.log('USERID:',user_id);
       new Link({ url: uri, user_id: user_id}).fetch().then(function(found) {
         if (found) {
           res.send(200, found.attributes);
@@ -135,17 +122,11 @@ function(req, res) {
   });
 });
 
-/************************************************************/
-// Write your authentication routes here
-/************************************************************/
-
-// post request to login
 app.post('/signup', function(req, res) {
     var username = req.body.username
     var password = req.body.password
     var session_id = req.sessionID
 
-    console.log('signup');
     Users.create({
       username: username,
       password: password,
@@ -167,33 +148,23 @@ app.post('/login',
      
     new User( {username : username} ).fetch().then(function(found) {
       if (found) {
-        console.log('found',found)
         bcrypt.compare(password, found.get('password'), function(err, result) {
-          console.log('RESULT:',result);
+          console.log('bcrypt result',result);
           if (err) { console.log(err); }
           if (result === false) {
             res.redirect('/login');
           } else {
-            // Add this session_id to the user table
-            console.log('Setting sessionid',req.sessionID);
-            found.set('session_id', req.sessionID).save(); // better way to update in table?
+            found.set('session_id', req.sessionID).save();
             res.redirect('/')
           }
         })  
       }
       else {
         res.redirect('/login');
-        console.log('not found');
       }
     })
   }
 )
-
-/************************************************************/
-// Handle the wildcard route last - if all other routes fail
-// assume the route is a short code and try and handle it here.
-// If the short-code doesn't exist, send the user to '/'
-/************************************************************/
 
 app.get('/*', function(req, res) {
   new Link({ code: req.params[0] }).fetch().then(function(link) {
